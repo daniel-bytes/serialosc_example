@@ -40,13 +40,18 @@ public:
 	const MonomeDeviceCollection& getDevices(void) const { return devices; }
 
 public:
+	// Serialosc messages
 	void sendDeviceQueryMessage(void);
 	void sendDeviceNotifyMessage(void);
 	void sendDeviceInfoMessage(int port);
 	void sendDevicePortMessage(int port);
 	void sendDevicePrefixMessage(int port);
+
+	// Device messages
 	void sendDeviceLedCommand(const MonomeDevice * const device, int x, int y, bool state);
 	void sendDeviceLedAllCommand(const MonomeDevice * const device, bool state);
+	
+	// TODO : Add other device outgoing message types (row, map, etc)
 
 protected:
 	void runThread(void);

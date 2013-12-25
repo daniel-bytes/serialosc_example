@@ -72,6 +72,13 @@ void SerialOsc::stop(void)
 	}
 }
 
+void SerialOsc::runThread(void)
+{
+	if (listenSocket != nullptr) {
+		listenSocket->Run();
+	}
+}
+
 void SerialOsc::sendDeviceQueryMessage(void)
 {
 	UdpTransmitSocket transmitSocket( IpEndpointName( SERIALOSC_ADDRESS, SERIALOSC_PORT ) );
@@ -189,13 +196,6 @@ void SerialOsc::sendDeviceLedAllCommand(const MonomeDevice * const device, bool 
 	transmitSocket.Send( p.Data(), p.Size() );
 }
 
-void SerialOsc::runThread(void)
-{
-	if (listenSocket != nullptr) {
-		listenSocket->Run();
-	}
-}
-
 void SerialOsc::ProcessMessage(const osc::ReceivedMessage& m, const IpEndpointName& remoteEndpoint)
 {
 	std::string address = m.AddressPattern();
@@ -280,6 +280,7 @@ void SerialOsc::ProcessMessage(const osc::ReceivedMessage& m, const IpEndpointNa
 
 			listener->buttonPressMessageReceived(*deviceIterator, x, y, state);
 		}
+		// TODO : Handle other incoming device commands
 	}
 	catch(osc::WrongArgumentTypeException &exc) {
 		printf("WrongArgumentTypeException: %s", exc.what());
