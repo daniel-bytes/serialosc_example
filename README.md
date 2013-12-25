@@ -1,0 +1,1 @@
+Demo application for connecting monome devices to a C++ application using oscpack and serialosc.
