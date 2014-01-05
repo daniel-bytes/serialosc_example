@@ -4,45 +4,67 @@
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="chrome=1">
     <title>Serialosc example by daniel-bytes</title>
-
     <link rel="stylesheet" href="stylesheets/styles.css">
     <link rel="stylesheet" href="stylesheets/pygment_trac.css">
-    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
+    <script src="javascripts/respond.js"></script>
     <!--[if lt IE 9]>
-    <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
     <![endif]-->
+    <!--[if lt IE 8]>
+    <link rel="stylesheet" href="stylesheets/ie.css">
+    <![endif]-->
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+
   </head>
   <body>
+      <div id="header">
+        <nav>
+          <li class="fork"><a href="https://github.com/daniel-bytes/serialosc_example">View On GitHub</a></li>
+          <li class="downloads"><a href="https://github.com/daniel-bytes/serialosc_example/zipball/master">ZIP</a></li>
+          <li class="downloads"><a href="https://github.com/daniel-bytes/serialosc_example/tarball/master">TAR</a></li>
+          <li class="title">DOWNLOADS</li>
+        </nav>
+      </div><!-- end header -->
+
     <div class="wrapper">
-      <header>
-        <h1>Serialosc example</h1>
-        <p>Example application for hooking up monome devices to a c++ application using serialosc and oscpack.</p>
 
-        <p class="view"><a href="https://github.com/daniel-bytes/serialosc_example">View the Project on GitHub <small>daniel-bytes/serialosc_example</small></a></p>
-
-
-        <ul>
-          <li><a href="https://github.com/daniel-bytes/serialosc_example/zipball/master">Download <strong>ZIP File</strong></a></li>
-          <li><a href="https://github.com/daniel-bytes/serialosc_example/tarball/master">Download <strong>TAR Ball</strong></a></li>
-          <li><a href="https://github.com/daniel-bytes/serialosc_example">View On <strong>GitHub</strong></a></li>
-        </ul>
-      </header>
       <section>
+        <div id="title">
+          <h1>Serialosc example</h1>
+          <p>Example application for hooking up monome devices to a c++ application using serialosc and oscpack.</p>
+          <hr>
+          <span class="credits left">Project maintained by <a href="https://github.com/daniel-bytes">daniel-bytes</a></span>
+          <span class="credits right">Hosted on GitHub Pages &mdash; Theme by <a href="https://twitter.com/michigangraham">mattgraham</a></span>
+        </div>
+
         <h1>
 <a name="serial-osc-c-example" class="anchor" href="#serial-osc-c-example"><span class="octicon octicon-link"></span></a>Serial OSC C++ Example</h1>
 
 <p>Getting a monome device to communicate with a custom-written native C++ application or VST plugin is actually not as hard as it might sound.  This tutorial will expect a moderate level of C++ knowledge, as well as a basic understanding of <a href="http://opensoundcontrol.org/">Open Sound Control (OSC)</a> and Monome's <a href="http://monome.org/docs/app:serialosc">serialosc</a> service/daemon application.  The tutorial was written on Windows in Visual C++ 2012, but it should be easy to compile on any other major compiler / IDE (XCode, GCC, Clang, etc).  Please note that I'm using a lot of C++11 goodies, so make sure your compiler is up to date.</p>
-
-<h3>
-<a name="serial-osc-example-code" class="anchor" href="#serial-osc-example-code"><span class="octicon octicon-link"></span></a><a href="https://github.com/daniel-bytes/serialosc_example">Serial OSC Example Code</a>
-</h3>
 
 <h2>
 <a name="first-steps" class="anchor" href="#first-steps"><span class="octicon octicon-link"></span></a>First Steps</h2>
 
 <p>First things first, go browse the code in the <a href="https://github.com/daniel-bytes/serialosc_example">serialosc_example repository</a>.  <a href="https://github.com/daniel-bytes/serialosc_example/blob/master/serialosc_example/serialosc_example.cpp">serialosc_example.cpp</a> houses our main function entry point, so we should start there.  First thing you will notice is a class called MonomeDemo, but let's skip over that and check out the actual main function.</p>
 
-<p>{% gist 8270297 %}</p>
+<p>`int main(int argc, const char* argv[])
+{
+        std::string input;
+        SerialOsc osc("test", 13000);
+        MonomeDemo device(&amp;osc);</p>
+
+<pre><code>    while (input != "q") {
+            std::cout &lt;&lt; "type 'q' to quit." &lt;&lt; std::endl;
+            std::getline(std::cin, input);
+    }
+
+    osc.stop();
+
+    return 0;
+</code></pre>
+
+<p>}`</p>
 
 <p>Most of the code here is actually just used to set up an infinite loop (until 'q' is entered).  The main parts of interest are
 <code>SerialOsc osc("test", 13000);
@@ -59,7 +81,38 @@ with the third argument being the maximum number of ports to try and use, defaul
 
 <p>Let's take a look at our MonomeDemo class, which also lives in <a href="https://github.com/daniel-bytes/serialosc_example/blob/master/serialosc_example/serialosc_example.cpp">serialosc_example.cpp</a>.</p>
 
-<p>{% gist 8270371 %}</p>
+<p>`class MonomeDemo
+        : public SerialOsc::Listener
+{
+public:
+        MonomeDemo(SerialOsc *osc)
+                : osc(osc)
+        {
+                osc-&gt;start(this);
+        }</p>
+
+<p>public:
+        virtual void deviceFound(const MonomeDevice * const device)
+        {
+                std::cout &lt;&lt; "Found device " &lt;&lt; device-&gt;id &lt;&lt; " (type " &lt;&lt; device-&gt;type &lt;&lt; ")." &lt;&lt; std::endl;
+                osc-&gt;sendDeviceLedAllCommand(device, false);
+        }</p>
+
+<pre><code>    virtual void deviceRemoved(const std::string &amp;id)
+    {
+            std::cout &lt;&lt; "Device " &lt;&lt; id &lt;&lt; " removed." &lt;&lt; std::endl;
+    }
+
+    virtual void buttonPressMessageReceived(MonomeDevice *device, int x, int y, bool state)
+    {
+            std::cout &lt;&lt; "Button press from " &lt;&lt; device-&gt;id &lt;&lt; " received. Prefix = " &lt;&lt; device-&gt;prefix &lt;&lt; ",  x = " &lt;&lt; x &lt;&lt; ", y = " &lt;&lt; y &lt;&lt; ", state = " &lt;&lt; state &lt;&lt; std::endl;
+            osc-&gt;sendDeviceLedCommand(device, x, y, state);
+    }
+</code></pre>
+
+<p>private:
+        SerialOsc *osc;
+};`</p>
 
 <p>This class represents our application itself, which is using the underlying SerialOsc object pointer to communicate with serialosc and our Monome devices.  Notice that our class inherits from SerialOsc::Listener.  This is a callback class type, and is used for SerialOsc to communicate that some device-specific event has occurred.  In this example, that would include the deviceFound, deviceRemoved and buttonPressMessageReceived methods.  If you look in these methods, you will see that a MonomeDevice object pointer is passed to the callback method, so that the application code can know which device the event occurred for.</p>
 
@@ -90,7 +143,42 @@ with the third argument being the maximum number of ports to try and use, defaul
 
 <p>In order for us to start listening for incoming OSC messages, we need to create a new UdpListeningReceiveSocket object.  The main problem we have here is that this object will block our thread while it waits for incoming messages, so we need to start this guy on it's own thread.  Luckily for us, C++ finally has a platform-independent threading library, defined under the <code>&lt;thread&gt;</code> header.  To take advantage of this, we just add the header as well as a std::thread member variable to our class.  Then, we set this up in our start method.</p>
 
-<p>{% gist 8270692 %}</p>
+<p>`void SerialOsc::start(Listener *listener)
+{
+        this-&gt;listener = listener;</p>
+
+<pre><code>    if (listener == nullptr || listenSocket != nullptr) {
+            return;
+    }
+
+    for (int i = 0; i &lt; portsToScan; i++) {
+            int tempPort = listenPort + i;
+
+            try {
+                    listenSocket = new UdpListeningReceiveSocket(
+                                    IpEndpointName( IpEndpointName::ANY_ADDRESS, tempPort ),
+                                    this);
+
+                    listenPort = tempPort;
+                    std::cout &lt;&lt; "Binding to port " &lt;&lt; tempPort &lt;&lt; "." &lt;&lt; std::endl;
+                    break;
+            }
+            catch(std::runtime_error &amp;ex) {
+                    // try next port
+                    listenSocket = nullptr;
+                    std::cerr &lt;&lt; "Failed to bind to port " &lt;&lt; tempPort &lt;&lt; ". " &lt;&lt; ex.what() &lt;&lt; std::endl;
+            }
+    }
+
+    if (listenSocket != nullptr) {
+            thread = std::thread(&amp;SerialOsc::runThread, this);
+
+            sendDeviceQueryMessage();
+            sendDeviceNotifyMessage();
+    }
+</code></pre>
+
+<p>}`</p>
 
 <p>This method takes a SerialOsc::Listener object pointer as it's parameter, which you will remember is implemented by our MonomeDemo class in serialosc_example.cpp.  Our SerialOsc class can then use this pointer to call back into the main application code to notify it of any device events (NOTE: remember we are listening on another thread, so this callback will happen on that thread.  This example code is NOT thread safe by any means, and a proper GUI application will probably need to then post this device information into some sort of queue for the GUI thread to read from and handle).</p>
 
@@ -174,12 +262,9 @@ Because serialosc will send device messages using the prefix we specified earlie
 <li>Additional device message types (tilt, arc, etc).</li>
 </ul>
       </section>
-      <footer>
-        <p>This project is maintained by <a href="https://github.com/daniel-bytes">daniel-bytes</a></p>
-        <p><small>Hosted on GitHub Pages &mdash; Theme by <a href="https://github.com/orderedlist">orderedlist</a></small></p>
-      </footer>
+
     </div>
-    <script src="javascripts/scale.fix.js"></script>
+    <!--[if !IE]><script>fixScale(document);</script><![endif]-->
     
   </body>
 </html>
