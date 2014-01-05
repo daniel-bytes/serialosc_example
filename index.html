@@ -1,0 +1,185 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <title>Serialosc example by daniel-bytes</title>
+
+    <link rel="stylesheet" href="stylesheets/styles.css">
+    <link rel="stylesheet" href="stylesheets/pygment_trac.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <!--[if lt IE 9]>
+    <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+  </head>
+  <body>
+    <div class="wrapper">
+      <header>
+        <h1>Serialosc example</h1>
+        <p>Example application for hooking up monome devices to a c++ application using serialosc and oscpack.</p>
+
+        <p class="view"><a href="https://github.com/daniel-bytes/serialosc_example">View the Project on GitHub <small>daniel-bytes/serialosc_example</small></a></p>
+
+
+        <ul>
+          <li><a href="https://github.com/daniel-bytes/serialosc_example/zipball/master">Download <strong>ZIP File</strong></a></li>
+          <li><a href="https://github.com/daniel-bytes/serialosc_example/tarball/master">Download <strong>TAR Ball</strong></a></li>
+          <li><a href="https://github.com/daniel-bytes/serialosc_example">View On <strong>GitHub</strong></a></li>
+        </ul>
+      </header>
+      <section>
+        <h1>
+<a name="serial-osc-c-example" class="anchor" href="#serial-osc-c-example"><span class="octicon octicon-link"></span></a>Serial OSC C++ Example</h1>
+
+<p>Getting a monome device to communicate with a custom-written native C++ application or VST plugin is actually not as hard as it might sound.  This tutorial will expect a moderate level of C++ knowledge, as well as a basic understanding of <a href="http://opensoundcontrol.org/">Open Sound Control (OSC)</a> and Monome's <a href="http://monome.org/docs/app:serialosc">serialosc</a> service/daemon application.  The tutorial was written on Windows in Visual C++ 2012, but it should be easy to compile on any other major compiler / IDE (XCode, GCC, Clang, etc).  Please note that I'm using a lot of C++11 goodies, so make sure your compiler is up to date.</p>
+
+<h3>
+<a name="serial-osc-example-code" class="anchor" href="#serial-osc-example-code"><span class="octicon octicon-link"></span></a><a href="https://github.com/daniel-bytes/serialosc_example">Serial OSC Example Code</a>
+</h3>
+
+<h2>
+<a name="first-steps" class="anchor" href="#first-steps"><span class="octicon octicon-link"></span></a>First Steps</h2>
+
+<p>First things first, go browse the code in the <a href="https://github.com/daniel-bytes/serialosc_example">serialosc_example repository</a>.  <a href="https://github.com/daniel-bytes/serialosc_example/blob/master/serialosc_example/serialosc_example.cpp">serialosc_example.cpp</a> houses our main function entry point, so we should start there.  First thing you will notice is a class called MonomeDemo, but let's skip over that and check out the actual main function.</p>
+
+<p>{% gist 8270297 %}</p>
+
+<p>Most of the code here is actually just used to set up an infinite loop (until 'q' is entered).  The main parts of interest are
+<code>SerialOsc osc("test", 13000);
+MonomeDemo device(&amp;osc);</code></p>
+
+<p>The first line here sets up a new SerialOsc object, passing in "test" as the device prefix and 130000 as the starting default port.  If you peek into SerialOsc.h, you'll notice the constructor actually takes 3 arguments:
+<code>SerialOsc(std::string devicePrefix, int defaultPort, int maxPortsToScan = 1000);</code>
+with the third argument being the maximum number of ports to try and use, defaulting to 1000.  This just means that if the default port you select is not available, the SerialOsc object will attempt to bind to the next maxPortsToScan ports until one works.</p>
+
+<p>The next line creates our MonomeDemo object, and passes it a pointer to our SerialOsc object in the constructor.</p>
+
+<h2>
+<a name="monomedemo-class" class="anchor" href="#monomedemo-class"><span class="octicon octicon-link"></span></a>MonomeDemo Class</h2>
+
+<p>Let's take a look at our MonomeDemo class, which also lives in <a href="https://github.com/daniel-bytes/serialosc_example/blob/master/serialosc_example/serialosc_example.cpp">serialosc_example.cpp</a>.</p>
+
+<p>{% gist 8270371 %}</p>
+
+<p>This class represents our application itself, which is using the underlying SerialOsc object pointer to communicate with serialosc and our Monome devices.  Notice that our class inherits from SerialOsc::Listener.  This is a callback class type, and is used for SerialOsc to communicate that some device-specific event has occurred.  In this example, that would include the deviceFound, deviceRemoved and buttonPressMessageReceived methods.  If you look in these methods, you will see that a MonomeDevice object pointer is passed to the callback method, so that the application code can know which device the event occurred for.</p>
+
+<h2>
+<a name="monomedevice-class" class="anchor" href="#monomedevice-class"><span class="octicon octicon-link"></span></a>MonomeDevice Class</h2>
+
+<p>Next we should look at our MonomeDevice class.  If you look at MonomeDevice.h, you will notice it's actually just a POD (Plain Old Data) struct.</p>
+
+<p><code>struct MonomeDevice
+{
+    std::string id;
+    std::string type;
+    std::string prefix;
+    int port;
+    int width;
+    int height;
+    int rotation;
+};</code></p>
+
+<p>The values stored here values returned from serialosc when querying for device information, so we will dive into those soon.</p>
+
+<h2>
+<a name="serialosc-class" class="anchor" href="#serialosc-class"><span class="octicon octicon-link"></span></a>SerialOsc Class</h2>
+
+<p>OK, finally we are at the meat of our little demo, the SerialOsc class.  This is the class that actually communicates with the serialosc server and allow us to access our Monome devices.</p>
+
+<p>serialosc uses OSC to for all communications.  OSC is an application-level protocol typically built on top of UDP.  Think of UDP as TCP's simpler sibling.  UDP is a network protocol, and network programming requires us to use Berkley Sockets or WinSock libraries, which is an awful lot of work.  Luckily, there are few C and C++ OSC libraries we can use to make our lives simpler.  For this example (and all of my own personal C++ application projects) I chose to use <a href="http://www.rossbencina.com/code/oscpack">oscpack</a>, written by Ross Bencina and distributed under the MIT open source license.  If you look in the repository, you'll notice I included the oscpack source, under the oscpack folder.  </p>
+
+<p>In order for us to start listening for incoming OSC messages, we need to create a new UdpListeningReceiveSocket object.  The main problem we have here is that this object will block our thread while it waits for incoming messages, so we need to start this guy on it's own thread.  Luckily for us, C++ finally has a platform-independent threading library, defined under the <code>&lt;thread&gt;</code> header.  To take advantage of this, we just add the header as well as a std::thread member variable to our class.  Then, we set this up in our start method.</p>
+
+<p>{% gist 8270692 %}</p>
+
+<p>This method takes a SerialOsc::Listener object pointer as it's parameter, which you will remember is implemented by our MonomeDemo class in serialosc_example.cpp.  Our SerialOsc class can then use this pointer to call back into the main application code to notify it of any device events (NOTE: remember we are listening on another thread, so this callback will happen on that thread.  This example code is NOT thread safe by any means, and a proper GUI application will probably need to then post this device information into some sort of queue for the GUI thread to read from and handle).</p>
+
+<p>The next bit of code is our port scanning, as mentioned earlier.  We basically just loop from zero to portsToScan, add our default listenPort and hope we can bind to that port (if we can't a std::runtime_error is thrown that we can catch).</p>
+
+<p>One we have our socket, we initialize our thread object with our SerialOsc class' runThread method, which will automatically start a new thread and call the specified method.</p>
+
+<p><code>thread = std::thread(&amp;SerialOsc::runThread, this);</code></p>
+
+<p>runThread itself is pretty simple, it just calls Run on our socket.</p>
+
+<p><code>if (listenSocket != nullptr) {
+    listenSocket-&gt;Run();
+}</code></p>
+
+<p>Once our thread is running, we send 2 commands to SerialOsc to begin our device discovery process.  These are sendDeviceQueryMessage() and sendDeviceNotifyMessage().</p>
+
+<h2>
+<a name="sending-commands-to-serialosc" class="anchor" href="#sending-commands-to-serialosc"><span class="octicon octicon-link"></span></a>Sending commands to serialosc</h2>
+
+<p>To send messages to serialosc, we can use the oscpack class UdpTransmitSocket.  This class represents an outgoing UDP socket connection to some destination server.  To use the class, we need to create a byte array buffer, as well as an osc::OutboundPacketStream object.  OutboundPacketStream works like most C++ output stream objects, using the left shift operator to push data into the stream.</p>
+
+<p>Once our stream is set up with our message address and data, we can call Send on our UdpTransmitSocket to send the message out to our server.</p>
+
+<h2>
+<a name="receiving-device-commands-from-serialosc" class="anchor" href="#receiving-device-commands-from-serialosc"><span class="octicon octicon-link"></span></a>Receiving Device Commands From SerialOsc</h2>
+
+<p>The real meat of our SerialOsc class is the ProcessMessage method, which handles any incoming messages from SerialOsc.  Note that this method is BIG!  It would be much cleaner to break out the handling of each message type into a separate method (or even another class for message parsing) but I kept it simple here for the sake of readability.</p>
+
+<p>Since we called sendDeviceQueryMessage(), we are expecting serialosc to respond with a message '/serialosc/device' (note that sendDeviceNotifyMessage() will respond with '/serialosc/add' if a new device is added after, and the handling of this is near identical to that of '/serialosc/device').  In our message handler here, our first order of business is to extract the OSC data and see what we get back.  That is handled by code that looks like this:</p>
+
+<p><code>std::string id = (iter++)-&gt;AsString();
+std::string type = (iter++)-&gt;AsString();
+int port = (iter++)-&gt;AsInt32();</code></p>
+
+<p>which gives us our device id, device type and the port serialosc assigned to the device.</p>
+
+<p>After that, we check our devices vector to see if we already have this device registered.  In this example we are storing the devices in a vector, but another design might store them in a map or hash table with the device id as a key.  </p>
+
+<h2>
+<a name="lambda-functions" class="anchor" href="#lambda-functions"><span class="octicon octicon-link"></span></a>Lambda Functions</h2>
+
+<p>To search the vector, we use the std::find_if function, which lives in the <code>&lt;algorithm&gt;</code> header.  This function lets us pass in a custom function to filter out the device we are searching for by some criteria.  What's nice about C++11 is that we finally have something called lambda functions.  Lambda functions are inline unnamed functions that are perfect for things like find_if, since we can specify the search code function in the same place as the code doing the search.  In older versions of C++ we would have to create a new function somewhere else to handle this searching.  The search code in question looks like this:</p>
+
+<p><code>auto deviceIterator = std::find_if(devices.begin(), devices.end(), [id] (const MonomeDevice* x) { return x-&gt;id == id; });</code></p>
+
+<p>First, we are using the 'auto' keyword to tell the compiler "hey, you figure out what the type is on the right of the equals sign", which is a nice convenience since C++ STL types can be awfully ugly to type out.  Next part that might look strange is 
+<code>[id] (const MonomeDevice* x) {</code></p>
+
+<p>This is where our inline lambda function is defined.  The brackets [] tells the compiler what variables to "capture", to be allowed to be used inside the function.  Here we tell it we only care about the id variable, which we want to capture by value (the default in C++).  We could also specify [=] to capture EVERYTHING by value, or [&amp;] to capture everything by reference (by "everything", I mean all variables in scope, which are local variables and class members in this case).</p>
+
+<h2>
+<a name="back-to-serialosc-message-parsing" class="anchor" href="#back-to-serialosc-message-parsing"><span class="octicon octicon-link"></span></a>Back to serialosc Message Parsing</h2>
+
+<p>Now that we have our device iterator, we can see if we already know about this device, or if we should add it to our vector.  After that, we call into our listener pointer to notify our application that we found a new device.  After that, we send a few messages back to serialosc: sendDeviceInfoMessage(port), sendDevicePrefixMessage(port) and sendDevicePortMessage(port).  sendDeviceInfoMessage() sends a request to serialosc for additional device information, sendDevicePrefixMessage(port) sends a request to serialosc to update our device prefix to the one defined in our SerialOsc constructor, and sendDevicePortMessage(port) tells serialosc to please start sending device button/tilt/knob/etc messages to our listen port, listening on the thread we set up earlier.</p>
+
+<p>When we called sendDeviceInfoMessage(), we are now expecting a series of messages to come back from serialosc.  The first will be '/sys/id'.  In our handler for this message, we just extract the ID from the message and store it in our currentDeviceID member variable.  Next we will receive '/sys/size', '/sys/rotation' and '/sys/prefix' (which we are ignoring) messages.  We use the ID we stored in currentDeviceID to know which device these messages are meant for (personally I wish serialosc just included the device id in these messages, but that's not how it works so we have to make due with the currentDeviceID variable instead).</p>
+
+<p>Another interesting message we are handling is '/serialosc/remove'.  We receive this message when we unplug a device (and '/serialosc/add' when we plug a new device in).  We can use this to update our devices vector.  Note that after an add or remove message is sent, we must immediately re-register our application with serialosc to receive more notifications by calling sendDeviceNotifyMessage().</p>
+
+<p>Our final message type we are looking at is our device button press messages.  Note the following else block:
+<code>else if (address == ("/" + devicePrefix + "/grid/key")) {</code>
+Because serialosc will send device messages using the prefix we specified earlier, we need to look for messages using that prefix in the address pattern.  Note that we are doing a string concatenation here, for performance it would be better if calculated this string as soon as we know what the device prefix is.</p>
+
+<h2>
+<a name="sending-device-led-commands" class="anchor" href="#sending-device-led-commands"><span class="octicon octicon-link"></span></a>Sending Device LED Commands</h2>
+
+<p>This should be pretty simple to understand now, just take a look at sendDeviceLedCommand() and sendDeviceLedAllCommand().</p>
+
+<h2>
+<a name="final-thoughts" class="anchor" href="#final-thoughts"><span class="octicon octicon-link"></span></a>Final Thoughts</h2>
+
+<p>That basically concludes our tutorial, hopefully by now you can compile the code and play with the debugger to see how it all works.</p>
+
+<p>Some things that are missing from this example code that you might want to account for in real production code are:</p>
+
+<ul>
+<li>Multiple prefixes per device</li>
+<li>Thread-safe device message callbacks</li>
+<li>Additional device LED commands </li>
+<li>Additional device message types (tilt, arc, etc).</li>
+</ul>
+      </section>
+      <footer>
+        <p>This project is maintained by <a href="https://github.com/daniel-bytes">daniel-bytes</a></p>
+        <p><small>Hosted on GitHub Pages &mdash; Theme by <a href="https://github.com/orderedlist">orderedlist</a></small></p>
+      </footer>
+    </div>
+    <script src="javascripts/scale.fix.js"></script>
+    
+  </body>
+</html>
